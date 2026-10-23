@@ -49,7 +49,7 @@ instalar_wallpapers() {
         [[ -f $f ]] || continue
         base="$(basename "$f")"
         [[ -e "$dst/$base" ]] && continue
-        cp -a "$f" "$dst/$base"
+        install -m 0644 "$f" "$dst/$base"
         n=$((n + 1))
     done
     if (( n > 0 )); then
