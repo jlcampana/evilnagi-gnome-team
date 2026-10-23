@@ -14,8 +14,12 @@ if [[ ! -f "$LISTA" ]]; then
     exit 1
 fi
 
-if ! command -v xdl >/dev/null 2>&1; then
-    echo "xdl no está en el PATH" >&2
+if command -v xdl >/dev/null 2>&1; then
+    XDL="$(command -v xdl)"
+elif [[ -x "$(dirname "$(readlink -f "$0")")/xdl" ]]; then
+    XDL="$(dirname "$(readlink -f "$0")")/xdl"
+else
+    echo "xdl no está en el PATH ni junto a este script" >&2
     exit 1
 fi
 
@@ -28,7 +32,7 @@ total=0
 while IFS= read -r url; do
     total=$((total + 1))
     echo "-> [$total] $url"
-    xdl -v "$url"
+    "$XDL" -v "$url"
 done < <(grep -oE 'https?://[^[:space:])>]+' "$LISTA")
 
 if [[ "$total" -eq 0 ]]; then
