@@ -2,32 +2,9 @@
 
 Tema completo de escritorio **GNOME** para **Fedora** y **Ubuntu**, instalable en un solo paso y sin clonar el repositorio. Deja el escritorio con la misma pinta que el equipo original: barra y dock grises, ventanas compactas estilo macOS, botones de cerrar y de confirmar en rojo, transparencias, reborde de ventanas, iconos MoreWaita con la papelera de Tela-circle, terminal MSX, extensiones de GNOME y scripts propios.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/jlcampana/evilnagi-gnome-team/main/install.sh | bash
-```
+## Instalación
 
-Al terminar, **cierra sesión y vuelve a entrar** para que GNOME cargue las extensiones nuevas.
-
----
-
-## Contenido
-
-| Bloque | Qué hace |
-|---|---|
-| **GTK / Nautilus** | Barras de título de 30 px y botones pequeños (estilo macOS), botón de cerrar rojo en GTK 4, pestañas compactas, Nautilus sin el título «Archivos» y con el panel lateral estrecho, diálogos de confirmación con los botones en fila y el botón destructivo en rojo |
-| **Barra y dock** | Barra superior y dock del gris `#2e2e32` al 95 % (mini-extensión `barra-nautilus`), dock fijo a la izquierda, iconos de 32 px y botón «Mostrar aplicaciones» con imagen propia |
-| **Ventanas** | Reborde de 2 px con P7 Borders (color de acento en la ventana activa), transparencias con blur en Nautilus y Ptyxis |
-| **Botones del sistema** | Apagar/Reiniciar/Cerrar sesión y confirmaciones de GNOME Shell en rojo (mini-extensión `botones-sesion`) |
-| **Iconos** | [MoreWaita](https://github.com/somepaulo/MoreWaita) + papelera de [Tela-circle](https://github.com/vinceliuice/Tela-circle-icon-theme) en verde (mini-tema `Papelera-Tela`), icono de Retoques de Reversal y de 1Password en la bandeja |
-| **Terminal** | Ptyxis con el perfil **MSX** (fondo azul del V9938, paleta del TMS9918, fuente Hack 11, opacidad 85 % y carpetas en amarillo en `ls`) |
-| **Extensiones** | Las mismas de GNOME del equipo original, con sus ajustes: Dash to Dock, Just Perfection, DING, Top Bar Organizer, Vitals, Clipboard Indicator, P7 Borders, AppIndicator, Transparencias… |
-| **Escritorio** | Modo oscuro, fondo del tema, 2 escritorios, botones de ventana a la izquierda, Ctrl+←/→ para cambiar de escritorio y ajustes de Nautilus/gThumb |
-| **Descargas** | `ydl`, `yda`, `xdl`, `twitter`, `r34dl` y `allr34dl`, con `gallery-dl`, `yt-dlp`, `ffmpeg`, Deno y cookies del navegador |
-| **Tracker** | Reproductor de música tracker (`tracker`): explora modarchive.org y reproduce MOD/XM/S3M/IT con `openmpt123` |
-
-No se incluyen datos personales (fondos, avatares, memorias, credenciales, scripts de emulación, etc.). Tampoco se instalan apps de escritorio: solo sus dependencias.
-
-## Requisitos
+### Requisitos
 
 - **Fedora** (41 o posterior) o **Ubuntu/Debian** (24.04 o posterior) con escritorio **GNOME 46–50**.
 - `curl` y conexión a internet.
@@ -36,21 +13,44 @@ No se incluyen datos personales (fondos, avatares, memorias, credenciales, scrip
 
 Probado en **Fedora 44** con **GNOME 50**. En **Ubuntu 24.04+** se instalan los equivalentes de `apt` y las mismas extensiones; **Dash to Dock no se instala**: chocaría con Ubuntu Dock, que usa los mismos ajustes, así que el dock queda igual.
 
-## Instalación
+### Instalación rápida (recomendada)
 
-### One-liner
+Abre una terminal en el equipo donde quieras poner el tema y pega:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/jlcampana/evilnagi-gnome-team/main/install.sh | bash
 ```
 
-Con opciones (por ejemplo, sin preguntas y en un portátil):
+Ese único comando:
+
+1. Descarga el repositorio a una carpeta temporal (no hace falta tener `git` ni clonar nada).
+2. Instala con `dnf` o `apt` los paquetes que falten (iconos, fuentes, Ptyxis, gThumb, `openmpt123`…).
+3. Aplica el tema de GNOME: GTK, Nautilus, botones, dock, barra, transparencias, rebordes, iconos y fondo.
+4. Instala las extensiones de GNOME y sus ajustes.
+5. Instala los scripts de descarga (`ydl`, `yda`, `xdl`, `twitter`, `r34dl`, `allr34dl`) y el reproductor **tracker**.
+6. Guarda una copia de lo que sobrescribe en `~/backups/evilnagi-gnome-team-<fecha>/`.
+
+El instalador pregunta si el equipo es portátil o sobremesa y pide confirmación antes de empezar. Las preguntas se leen por `/dev/tty`, así que funcionan aunque el script venga por una tubería (`curl | bash`).
+
+**Al terminar, cierra sesión y vuelve a entrar** para que GNOME cargue las extensiones y el tema.
+
+### Instalación sin preguntas
+
+Para que no pregunte nada (usa los valores por defecto):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jlcampana/evilnagi-gnome-team/main/install.sh | bash -s -- --si
+```
+
+En un portátil (no instala Soft Brightness Plus, que choca con el brillo del portátil):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/jlcampana/evilnagi-gnome-team/main/install.sh | bash -s -- --si --portatil
 ```
 
-### Desde un clon
+### Instalación desde un clon
+
+Si prefieres tener el repositorio en local:
 
 ```bash
 git clone https://github.com/jlcampana/evilnagi-gnome-team.git
@@ -69,10 +69,27 @@ cd evilnagi-gnome-team
 | `--sin-extensiones` | No toca las extensiones de GNOME |
 | `--sin-descargas` | No instala scripts de descarga ni tracker |
 | `--solo-tema` | Solo el tema (equivale a `--sin-descargas`) |
-| `--solo-descargas` | Solo descargas y tracker |
+| `--solo-descargas` | Solo descargas y tracker (implica `--sin-paquetes` y `--sin-tema`) |
 | `-h`, `--ayuda` | Ayuda |
 
 El instalador es idempotente: se puede volver a ejecutar para actualizar. Todo lo que sobrescribe (GTK CSS, scripts, `.bashrc`…) se guarda antes en `~/backups/evilnagi-gnome-team-<fecha>/`.
+
+## Contenido
+
+| Bloque | Qué hace |
+|---|---|
+| **GTK / Nautilus** | Barras de título de 30 px y botones pequeños (estilo macOS), botón de cerrar rojo en GTK 4, pestañas compactas, Nautilus sin el título «Archivos» y con el panel lateral estrecho, diálogos de confirmación con los botones en fila y el botón destructivo en rojo |
+| **Barra y dock** | Barra superior y dock del gris `#2e2e32` al 95 % (mini-extensión `barra-nautilus`), dock fijo a la izquierda, iconos de 32 px y botón «Mostrar aplicaciones» con imagen propia |
+| **Ventanas** | Reborde de 2 px con P7 Borders (color de acento en la ventana activa), transparencias con blur en Nautilus y Ptyxis |
+| **Botones del sistema** | Apagar/Reiniciar/Cerrar sesión y confirmaciones de GNOME Shell en rojo (mini-extensión `botones-sesion`) |
+| **Iconos** | [MoreWaita](https://github.com/somepaulo/MoreWaita) + papelera de [Tela-circle](https://github.com/vinceliuice/Tela-circle-icon-theme) en verde (mini-tema `Papelera-Tela`), icono de Retoques de Reversal y de 1Password en la bandeja |
+| **Terminal** | Ptyxis con el perfil **MSX** (fondo azul del V9938, paleta del TMS9918, fuente Hack 11, opacidad 85 % y carpetas en amarillo en `ls`) |
+| **Extensiones** | Las mismas de GNOME del equipo original, con sus ajustes: Dash to Dock, Just Perfection, DING, Top Bar Organizer, Vitals, Clipboard Indicator, P7 Borders, AppIndicator, Transparencias… |
+| **Escritorio** | Modo oscuro, fondo del tema, 2 escritorios, botones de ventana a la izquierda, Ctrl+←/→ para cambiar de escritorio y ajustes de Nautilus/gThumb |
+| **Descargas** | `ydl`, `yda`, `xdl`, `twitter`, `r34dl` y `allr34dl`, con `gallery-dl`, `yt-dlp`, `ffmpeg`, Deno y cookies del navegador |
+| **Tracker** | Reproductor de música tracker (`tracker`): explora modarchive.org y reproduce MOD/XM/S3M/IT con `openmpt123` |
+
+No se incluyen datos personales (fondos, avatares, memorias, credenciales, scripts de emulación, etc.). Tampoco se instalan apps de escritorio: solo sus dependencias.
 
 ## Descargas
 
