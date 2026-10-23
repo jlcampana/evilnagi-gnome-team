@@ -49,6 +49,7 @@ Qué instala:
   · Scripts del tema en ~/scripts, y ~/scripts y ~/.local/bin en el PATH.
   · Descargas: ydl, yda, xdl, twitter, r34dl, allr34dl (con gallery-dl,
     yt-dlp, ffmpeg, Deno…) y el reproductor de música tracker.
+  · Copia los fondos de wallpapers/ a la carpeta de imágenes del usuario.
   · Configuración de descargas en ~/.config/evilnagi-gnome-team/descargas.conf
 
 Todo lo que se sobrescribe se guarda en ~/backups/evilnagi-gnome-team-<fecha>/
@@ -95,6 +96,7 @@ configurar_alias_bashrc
 if (( CON_TEMA )); then
     aplicar_tema
     aplicar_ajustes_gnome
+    instalar_wallpapers
     (( CON_EXTENSIONES )) && instalar_extensiones_gnome
 fi
 

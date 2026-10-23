@@ -22,6 +22,43 @@ poner_fondo() {
     ok "Fondo de escritorio del tema"
 }
 
+carpeta_imagenes() {
+    local d=""
+    if command -v xdg-user-dir >/dev/null 2>&1; then
+        d="$(xdg-user-dir PICTURES 2>/dev/null || true)"
+    fi
+    if [[ -z $d || $d == "$HOME" ]]; then
+        if [[ -d "$HOME/Imágenes" ]]; then
+            d="$HOME/Imágenes"
+        else
+            d="$HOME/Pictures"
+        fi
+    fi
+    printf '%s\n' "$d"
+}
+
+# Copia los fondos de wallpapers/ a la carpeta de imágenes del usuario, sin
+# sobrescribir los que ya existan. En un sistema en español suele ser
+# ~/Imágenes; en inglés, ~/Pictures (se pregunta a xdg-user-dir).
+instalar_wallpapers() {
+    local src="$RAIZ/wallpapers" dst n=0 f base
+    [[ -d $src ]] || return 0
+    dst="$(carpeta_imagenes)"
+    mkdir -p "$dst"
+    for f in "$src"/*; do
+        [[ -f $f ]] || continue
+        base="$(basename "$f")"
+        [[ -e "$dst/$base" ]] && continue
+        cp -a "$f" "$dst/$base"
+        n=$((n + 1))
+    done
+    if (( n > 0 )); then
+        ok "$n fondos de pantalla copiados a $dst"
+    else
+        info "Los fondos de pantalla ya estaban en $dst"
+    fi
+}
+
 aplicar_ajustes_gnome() {
     paso "Ajustes generales de GNOME"
 

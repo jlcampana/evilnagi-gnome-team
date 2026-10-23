@@ -27,9 +27,10 @@ Ese único comando:
 2. Añade a `~/.bashrc` los alias `reload` y `open` (sin duplicar los que ya existan).
 3. Instala con `dnf` o `apt` los paquetes que falten (iconos, fuentes, Ptyxis, gThumb, `openmpt123`…).
 4. Aplica el tema de GNOME: GTK, Nautilus, botones, dock, barra, transparencias, rebordes, iconos y fondo.
-5. Instala las extensiones de GNOME y sus ajustes.
-6. Instala los scripts de descarga (`ydl`, `yda`, `xdl`, `twitter`, `r34dl`, `allr34dl`) y el reproductor **tracker**.
-7. Guarda una copia de lo que sobrescribe en `~/backups/evilnagi-gnome-team-<fecha>/`.
+5. Copia los fondos de `wallpapers/` a tu carpeta de imágenes (`~/Imágenes` o `~/Pictures`).
+6. Instala las extensiones de GNOME y sus ajustes.
+7. Instala los scripts de descarga (`ydl`, `yda`, `xdl`, `twitter`, `r34dl`, `allr34dl`) y el reproductor **tracker**.
+8. Guarda una copia de lo que sobrescribe en `~/backups/evilnagi-gnome-team-<fecha>/`.
 
 El instalador pregunta si el equipo es portátil o sobremesa y pide confirmación antes de empezar. Las preguntas se leen por `/dev/tty`, así que funcionan aunque el script venga por una tubería (`curl | bash`).
 
@@ -87,10 +88,13 @@ El instalador es idempotente: se puede volver a ejecutar para actualizar. Todo l
 | **Terminal** | Ptyxis con el perfil **MSX** (fondo azul del V9938, paleta del TMS9918, fuente Hack 11, opacidad 85 % y carpetas en amarillo en `ls`) |
 | **Extensiones** | Las mismas de GNOME del equipo original, con sus ajustes: Dash to Dock, Just Perfection, DING, Top Bar Organizer, Vitals, Clipboard Indicator, P7 Borders, AppIndicator, Transparencias… |
 | **Escritorio** | Modo oscuro, fondo del tema, 2 escritorios, botones de ventana a la izquierda, Ctrl+←/→ para cambiar de escritorio y ajustes de Nautilus/gThumb |
+| **Fondos** | Copia los fondos de `wallpapers/` a la carpeta de imágenes del usuario (`~/Imágenes` o `~/Pictures`) sin sobrescribir los que ya existan |
 | **Descargas** | `ydl`, `yda`, `xdl`, `twitter`, `r34dl` y `allr34dl`, con `gallery-dl`, `yt-dlp`, `ffmpeg`, Deno y cookies del navegador |
 | **Tracker** | Reproductor de música tracker (`tracker`): explora modarchive.org y reproduce MOD/XM/S3M/IT con `openmpt123` |
 
-No se incluyen datos personales (fondos, avatares, memorias, credenciales, scripts de emulación, etc.). Tampoco se instalan apps de escritorio: solo sus dependencias.
+Los fondos de `wallpapers/` se copian a la carpeta de imágenes del sistema (`~/Imágenes` o `~/Pictures`, según el idioma) y se pueden elegir en **Ajustes → Apariencia → Fondo**.
+
+No se incluyen datos personales (avatares, memorias, credenciales, scripts de emulación, etc.). Tampoco se instalan apps de escritorio: solo sus dependencias.
 
 ## Descargas
 
@@ -137,6 +141,7 @@ tema/extensiones-locales/  Extensión propia Transparencias
 tema/nautilus-python/      Extensiones de Nautilus (gThumb, panel estrecho, opacidad)
 tema/iconos/apps-propias/  Iconos propios (botón del dock, bandeja de 1Password)
 tema/fondos/fondo.svg      Fondo del tema
+wallpapers/                Fondos de pantalla que se copian a la carpeta de imágenes
 extras/trackerplay/        Reproductor de música tracker
 ```
 
@@ -148,7 +153,7 @@ extras/trackerplay/        Reproductor de música tracker
 ./bin/desinstalar.sh --todo   # además borra venvs y configuración
 ```
 
-Los ajustes de dconf (dock, extensiones, fondo…) no se revierten solos; el desinstalador deja las extensiones desactivadas y explica cómo volver al aspecto por defecto. También quita los bloques que el instalador añadió a `~/.bashrc` (el `PATH` de `~/scripts` y los alias `reload` y `open`), sin tocar el resto del archivo.
+Los ajustes de dconf (dock, extensiones, fondo…) no se revierten solos; el desinstalador deja las extensiones desactivadas y explica cómo volver al aspecto por defecto. También quita los bloques que el instalador añadió a `~/.bashrc` (el `PATH` de `~/scripts` y los alias `reload` y `open`), sin tocar el resto del archivo. Los fondos copiados a la carpeta de imágenes se conservan.
 
 ## Problemas frecuentes
 
