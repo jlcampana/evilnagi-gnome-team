@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# Descarga las imágenes (y opcionalmente vídeos) de una URL de X usando las cookies del navegador configurado (Brave por defecto).
+# Uso: xdl [-v] [-d carpeta] [-t N] <url>
+set -euo pipefail
+
+# Configuración común (carpeta de descargas, credenciales de rule34…)
+CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/evilnagi-gnome-team/descargas.conf"
+# shellcheck disable=SC1090
+[[ -f $CONFIG ]] && . "$CONFIG"
+DESCARGAS_DIR="${DESCARGAS_DIR:-$(xdg-user-dir DOWNLOAD 2>/dev/null || echo "$HOME/Descargas")}"
+NAVEGADOR="${NAVEGADOR:-brave}"
+
+GDL="$HOME/.local/share/gallery-dl-venv/bin/gallery-dl"
+DESTINATION_DIR="$DESCARGAS_DIR/twitter"
+
+usage() {
+    cat <<EOF
+Uso: $(basename "$0") [-v] [-d carpeta] [-t N] <url de X>
+
+  -v           Descargar también los vídeos (por defecto solo imágenes)
+  -d carpeta   Carpeta de destino (por defecto: $DESTINATION_DIR/<usuario>)
+  -t N         Parar tras N archivos seguidos ya descargados (por defecto 10,
+               0 = desactivado)
+  -h           Mostrar esta ayuda
+
+Ejemplos:
+  $(basename "$0") https://x.com/picopico256/media
+  $(basename "$0") -v https://x.com/picopico256/media
+  $(basename "$0") https://x.com/<tu_usuario>/likes     (tus "me gusta")
+  $(basename "$0") https://x.com/i/bookmarks            (tus guardados)
+EOF
+}
+
+videos=false
+dest=""
+abort=10
+while getopts ":vd:t:h" opt; do
+    case $opt in
+        v) videos=true ;;
+        d) dest="$OPTARG" ;;
+        t) abort="$OPTARG" ;;
+        h) usage; exit 0 ;;
+        :) echo "La opción -$OPTARG necesita un argumento" >&2; exit 1 ;;
+        *) usage >&2; exit 1 ;;
+    esac
+done
+shift $((OPTIND - 1))
+
+[[ $abort =~ ^[0-9]+$ ]] || { echo "El valor de -t debe ser un entero no negativo" >&2; exit 1; }
+
+[[ $# -eq 1 ]] || { usage >&2; exit 1; }
+url="${1%%\?*}"  # quitar parámetros como ?filter=photo
+
+# Instalar gallery-dl si no está
+if [[ ! -x $GDL ]]; then
+    echo "Instalando gallery-dl..."
+    python3 -m venv "$HOME/.local/share/gallery-dl-venv"
+    "$HOME/.local/share/gallery-dl-venv/bin/pip" install -q gallery-dl secretstorage
+fi
+
+if [[ -z $dest ]]; then
+    path=$(sed -E 's#^(https?://)?(www\.|mobile\.)?(x|twitter)\.com/##' <<<"$url")
+    [[ $path != "$url" ]] || { echo "No parece una URL de X: $url" >&2; exit 1; }
+    IFS=/ read -r user section _ <<<"$path"
+    base="$DESTINATION_DIR"
+    if [[ $user == i && $section == bookmarks ]]; then
+        dest="$base/guardados"
+    elif [[ -z $user ]]; then
+        echo "No se pudo sacar el usuario de la URL: $url" >&2; exit 1
+    elif [[ $section == likes ]]; then
+        dest="$base/${user}_likes"
+    else
+        dest="$base/$user"
+    fi
+fi
+mkdir -p "$dest"
+
+echo "Descargando en $dest (vídeos: $videos, parar tras $abort seguidos ya descargados)"
+abort_args=()
+(( abort > 0 )) && abort_args=(-A "$abort")
+"$GDL" --cookies-from-browser "$NAVEGADOR" \
+    -D "$dest" \
+    -o videos="$videos" \
+    "${abort_args[@]}" \
+    --download-archive "$dest/.archive.sqlite3" \
+    "$url"
+
+echo "Listo: $(find "$dest" -maxdepth 1 -type f ! -name '.*' | wc -l) archivos en $dest"

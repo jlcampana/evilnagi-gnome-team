@@ -1,0 +1,292 @@
+#!/usr/bin/env bash
+# Descarga las imágenes (y opcionalmente vídeos) de rule34.xxx usando gallery-dl.
+# Uso: r34dl [-v] [-H] [-n cantidad] [-p páginas] [-t umbral] [-c vetados] [-d carpeta] <url | tags...>
+set -euo pipefail
+
+CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/evilnagi-gnome-team/descargas.conf"
+# shellcheck disable=SC1090
+[[ -f $CONFIG ]] && . "$CONFIG"
+DESCARGAS_DIR="${DESCARGAS_DIR:-$(xdg-user-dir DOWNLOAD 2>/dev/null || echo "$HOME/Descargas")}"
+NAVEGADOR="${NAVEGADOR:-brave}"
+
+GDL="$HOME/.local/share/gallery-dl-venv/bin/gallery-dl"
+PY="$HOME/.local/share/gallery-dl-venv/bin/python"
+DESTINATION_DIR="$DESCARGAS_DIR/r34"
+HTML_SCRAPER="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)/r34html.py"
+PER_PAGE=100   # posts por página de resultados en el API de rule34
+
+usage() {
+    cat <<EOF
+Uso: $(basename "$0") [-v] [-H] [-n cantidad] [-p páginas] [-t umbral] [-c fichero] [-d carpeta] <url | tags>
+
+  -v            Descargar también los vídeos/webm (por defecto solo imágenes)
+  -H            Raspar la web HTML en vez del API (si el API está caído)
+  -n cantidad   Limitar el número total de imágenes descargadas
+  -p páginas    Limitar el número de páginas recorridas (100 posts por página)
+  -t umbral     Parar tras N imágenes seguidas ya descargadas (por defecto 10, 0 = desactivado)
+  -c fichero    Fichero de tags vetados (por defecto: ~/.config/r34dl/banned-tags.txt)
+  -d carpeta    Carpeta de destino (por defecto: $DESTINATION_DIR/<tags>)
+  -h            Mostrar esta ayuda
+
+Ejemplos:
+  $(basename "$0") "https://rule34.xxx/index.php?page=post&s=list&tags=erza_scarlet"
+  $(basename "$0") erza_scarlet
+  $(basename "$0") -n 50 "erza_scarlet solo"
+  $(basename "$0") -H erza_scarlet          # cuando el API está caído
+  $(basename "$0") https://rule34.xxx/index.php?page=post&s=view&id=123456
+
+Ojo: las URLs con '&' van entre comillas, si no bash las parte en varios
+comandos y el script solo recibe la parte anterior al primer '&'.
+
+El progreso se guarda en .archive.sqlite3 (igual que xdl), así retomar
+no repite nada, y lo descargado aquí tampoco se vuelve a bajar con gallery-dl.
+
+Variables de entorno (el API de rule34.xxx las exige):
+  R34_API_KEY, R34_USER_ID
+  Se Sacan de https://rule34.xxx/index.php?page=account&s=options (marca
+  "Generate New Key?" y guarda). Sin ellas el script cae al modo HTML (-H).
+EOF
+}
+
+videos=false
+html=false
+limit=""
+pages=""
+stop_skips=10
+banfile_opt=""
+dest=""
+while getopts ":vHd:n:p:t:c:h" opt; do
+    case $opt in
+        v) videos=true ;;
+        H) html=true ;;
+        d) dest="$OPTARG" ;;
+        n) limit="$OPTARG" ;;
+        p) pages="$OPTARG" ;;
+        t) stop_skips="$OPTARG" ;;
+        c) banfile_opt="$OPTARG" ;;
+        h) usage; exit 0 ;;
+        :) echo "La opción -$OPTARG necesita un argumento" >&2; exit 1 ;;
+        *) usage >&2; exit 1 ;;
+    esac
+done
+shift $((OPTIND - 1))
+
+[[ $# -ge 1 ]] || { usage >&2; exit 1; }
+arg="$*"
+
+for v in "$limit" "$pages" "$stop_skips"; do
+    [[ -z $v || $v =~ ^[0-9]+$ ]] || { echo "Los números deben ser enteros no negativos" >&2; exit 1; }
+done
+[[ -n $banfile_opt && ! -f $banfile_opt ]] && {
+    echo "No existe el fichero de tags vetados: $banfile_opt" >&2; exit 1; }
+
+# Instalar gallery-dl si no está
+if [[ ! -x $GDL ]]; then
+    echo "Instalando gallery-dl..."
+    python3 -m venv "$HOME/.local/share/gallery-dl-venv"
+    "$HOME/.local/share/gallery-dl-venv/bin/pip" install -q gallery-dl secretstorage
+fi
+# curl_cffi imita el TLS de Chrome: sin él Cloudflare bloquea el modo -H
+if ! "$PY" -c "import curl_cffi" >/dev/null 2>&1; then
+    echo "Instalando curl_cffi (necesario para el modo -H)..."
+    "$HOME/.local/share/gallery-dl-venv/bin/pip" install -q curl_cffi || \
+        echo "aviso: no se pudo instalar curl_cffi" >&2
+fi
+
+urldecode() { python3 -c 'import sys, urllib.parse; print(urllib.parse.unquote_plus(sys.argv[1]))' "$1"; }
+urlencode() { python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$1"; }
+
+if [[ $arg == *rule34.xxx* ]]; then
+    # Es una URL: extraer los tags (o el id de un post suelto)
+    url="$arg"
+    tags_raw=$(sed -nE 's/.*[?&]tags=([^&]+).*/\1/p' <<<"$url")
+    if [[ -n $tags_raw ]]; then
+        tags=$(urldecode "$tags_raw")
+        folder=${tags// /_}
+    else
+        tags=""
+        id=$(sed -nE 's/.*[?&]id=([0-9]+).*/\1/p' <<<"$url")
+        if [[ -z $id ]]; then
+            echo "No pude interpretar la URL: $url" >&2
+            if [[ $url == *"page=post"* || $url == *"s=list"* ]]; then
+                cat >&2 <<EOF
+
+Pista: la URL parece cortada. En bash los '&' separan comandos, así que la
+URL tiene que ir entre comillas (si no, el script solo recibe la parte
+anterior al primer '&'):
+
+  $(basename "$0") "https://rule34.xxx/index.php?page=post&s=list&tags=TAGS"
+
+EOF
+            fi
+            exit 1
+        fi
+        folder="posts"
+    fi
+else
+    # No es una URL: tratar los argumentos como tags
+    tags="$arg"
+    url="https://rule34.xxx/index.php?page=post&s=list&tags=$(urlencode "$tags")"
+    folder=${tags// /_}
+fi
+
+folder=${folder//\//_}  # nada de barras en el nombre de carpeta
+[[ -n $dest ]] || dest="$DESTINATION_DIR/$folder"
+mkdir -p "$dest"
+
+# --- lista de tags vetados (compartida por ambos modos) ---
+BANFILE=""
+for cand in "$banfile_opt" "${R34DL_CONFIG:-}" \
+            "$HOME/.config/r34dl/banned-tags.txt" \
+            "${XDG_CONFIG_HOME:-$HOME/.config}/evilnagi-gnome-team/banned-tags.txt" \
+            "$HOME/scripts/.r34dl.config"; do
+    if [[ -n $cand && -f $cand ]]; then
+        BANFILE=$cand
+        break
+    fi
+done
+
+echo "Tags: ${tags:-<post $id>}"
+echo "Descargando en $dest (vídeos: $videos${limit:+, límite: $limit}${pages:+, páginas: $pages})"
+[[ -n $BANFILE ]] && echo "Tags vetados: $BANFILE ($(grep -cvE '^\s*(#|$)' "$BANFILE") reglas)"
+
+# ============================ modo HTML ============================
+run_html() {
+    extra=()
+    [[ $videos == true ]] && extra+=(-v)
+    [[ -n $limit ]] && extra+=(-n "$limit")
+    [[ -n $pages ]] && extra+=(-p "$pages")
+    [[ -n $BANFILE ]] && extra+=(--blacklist "$BANFILE")
+    "$PY" "$HTML_SCRAPER" --browser "$NAVEGADOR" \
+        -d "$dest" -t "$stop_skips" "${extra[@]}" "$arg"
+}
+
+if [[ $html == true ]]; then
+    run_html
+    exit $?
+fi
+
+# ============================ modo API =============================
+archive="$dest/.archive.sqlite3"
+count_archive() {
+    "$PY" - "$archive" <<'PYEOF'
+import sqlite3, sys
+try:
+    con = sqlite3.connect(sys.argv[1], timeout=60)
+    print(con.execute("SELECT COUNT(*) FROM archive").fetchone()[0])
+except sqlite3.Error:
+    print(0)
+PYEOF
+}
+
+base_args=(
+    --cookies-from-browser "$NAVEGADOR"
+    -D "$dest"
+    --download-archive "$archive"
+)
+[[ $videos == false ]] && base_args+=(--filter "extension not in ('webm', 'mp4')")
+# la categoría de rule34.xxx en gallery-dl es "rule34" (no "gelbooru_v02")
+[[ -n $BANFILE ]] && base_args+=(-o "extractor.rule34.blacklist-tags=$BANFILE")
+[[ -n ${R34_API_KEY:-} ]] && base_args+=(-o "api-key=$R34_API_KEY" -o "user-id=${R34_USER_ID:-}")
+
+# Un post suelto: una sola consulta, sin bucle de páginas
+if [[ $url == *"&s=view"* ]]; then
+    rc=0
+    "$GDL" "${base_args[@]}" "$url" || rc=$?
+    if (( rc != 0 )); then
+        echo "gallery-dl terminó con error (código $rc)" >&2
+        case $rc in
+            16) echo "El API de rule34.xxx pide credenciales (api-key + user-id):" >&2
+                echo "  export R34_API_KEY=<tu api key>" >&2
+                echo "  export R34_USER_ID=<tu user id>" >&2 ;;
+            8)  echo "Cloudflare pide verificación: abre https://rule34.xxx en Brave." >&2 ;;
+        esac
+        exit $rc
+    fi
+    echo "Listo: $(find "$dest" -maxdepth 1 -type f ! -name '.*' | wc -l) archivos en $dest"
+    exit 0
+fi
+
+start=1
+pagina=1
+total_new=0
+seguidos=0   # imágenes seguidas que ya estaban en la base de datos
+
+while true; do
+    [[ -n $pages ]] && (( pagina > pages )) && { echo "Límite de $pages páginas alcanzado"; break; }
+
+    # gallery-dl no tiene límite de archivos: se usa --range (indexado sobre
+    # los posts) y el bloque se ajusta a lo que queda por descargar
+    if [[ -n $limit && $limit -gt 0 ]]; then
+        restantes=$((limit - total_new))
+        (( restantes <= 0 )) && { echo "Límite de $limit imágenes alcanzado"; break; }
+        largo=$restantes
+        (( largo > PER_PAGE )) && largo=$PER_PAGE
+    else
+        largo=$PER_PAGE
+    fi
+    fin=$((start + largo - 1))
+    extra=(--range "$start-$fin")
+
+    antes=$(count_archive)
+    rc=0
+    "$GDL" "${base_args[@]}" "${extra[@]}" "$url" || rc=$?
+    if (( rc != 0 )); then
+        case $rc in
+            16)  # AuthRequired: el API exige api-key + user-id
+                echo "El API de rule34.xxx pide credenciales (api-key + user-id)." >&2
+                if [[ -z ${R34_API_KEY:-} ]]; then
+                    cat >&2 <<EOF
+
+Para usar el API:
+  1. Abre https://rule34.xxx/index.php?page=account&s=options en Brave
+  2. Marca "Generate New Key?" y guarda los cambios
+  3. export R34_API_KEY=<tu api key>
+     export R34_USER_ID=<tu user id>   (sale en esa misma página)
+
+EOF
+                    echo "Sin credenciales, reintento con el raspado HTML (-H)..." >&2
+                    run_html || exit $?
+                    break
+                fi
+                echo "Revisa R34_API_KEY y R34_USER_ID (se copian de la página" >&2
+                echo "de opciones de la cuenta de rule34.xxx)." >&2
+                ;;
+            8)   # ChallengeError: Cloudflare pide verificación
+                echo "Cloudflare pide verificación para esta conexión." >&2
+                echo "Abre https://rule34.xxx en Brave, espera a que cargue del todo" >&2
+                echo "y vuelve a intentarlo." >&2
+                ;;
+            *)
+                echo "gallery-dl terminó con error (código $rc) en la página $pagina" >&2
+                echo "Si el API está caído, prueba con -H (raspado de la web): $(basename "$0") -H ..." >&2
+                ;;
+        esac
+        exit $rc
+    fi
+    despues=$(count_archive)
+    nuevos=$((despues - antes))
+    total_new=$((total_new + nuevos))
+    saltados=$((largo - nuevos))
+    (( saltados < 0 )) && saltados=0
+    seguidos=$((seguidos + saltados))
+    echo "Página $pagina: $nuevos archivos nuevos ($total_new en total)"
+
+    if (( nuevos == 0 )); then
+        if (( stop_skips > 0 && seguidos >= stop_skips )); then
+            echo "Paro: la página $pagina no aportó nada nuevo ($seguidos seguidas ya en la base de datos)"
+        else
+            echo "Fin de los resultados (página $pagina)"
+        fi
+        break
+    fi
+    if (( stop_skips > 0 && seguidos >= stop_skips )); then
+        echo "Paro: $seguidos imágenes seguidas ya estaban en la base de datos (página $pagina)"
+        break
+    fi
+
+    start=$((fin + 1))
+    pagina=$((pagina + 1))
+done
+
+echo "Listo: $(find "$dest" -maxdepth 1 -type f ! -name '.*' | wc -l) archivos en $dest"

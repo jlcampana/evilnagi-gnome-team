@@ -1,0 +1,474 @@
+#!/usr/bin/env bash
+# ydl - Descarga de YouTube (vídeo o audio) con yt-dlp.
+#
+# Detecta automáticamente si la URL es un vídeo suelto, una playlist o un canal.
+# No hay que pasar ningún parámetro para indicar el tipo.
+#
+# Uso:
+#   ydl [opciones] <url>
+#
+# Opciones:
+#   -d, --dest DIR      Carpeta de destino (por defecto: la carpeta de vídeos
+#                       del usuario: ~/.Vídeos según XDG, o ~/Videos)
+#   -a, --audio FMT     Descargar sólo el audio: mp3 u ogg
+#   -q, --quality FMT   best (por defecto) = máxima calidad, mp4 directo
+#                       h264 = mp4 con h264 (más compatible, hasta 1080p)
+#   -n, --no-cookies    No usar las cookies del navegador
+#       --list          Listar los formatos disponibles y salir
+#   -s, --simulate     No descargar nada: sólo mostrar lo que se descargaría
+#       --force         Ignorar el registro de descargas y volver a bajar todo
+#   -h, --help          Mostrar esta ayuda
+#
+# Registro de descargas: base de datos SQLite en <destino>/.archive.sqlite3
+# (mismo esquema que el de gallery-dl: tabla "archive"). Así no se vuelve a
+# descargar lo que ya está en la carpeta.
+#
+# Ejemplos:
+#   ydl https://youtu.be/dQw4w9WgXcQ
+#   ydl https://www.youtube.com/playlist?list=PLxxxx
+#   ydl https://www.youtube.com/@canal
+#   ydl -a mp3 https://youtu.be/dQw4w9WgXcQ
+#   ydl -a ogg https://youtu.be/dQw4w9WgXcQ
+#   ydl -d ~/Descargas https://youtu.be/dQw4w9WgXcQ
+#
+# ---------------------------------------------------------------------------
+# DEPENDENCIAS (Fedora)
+# ---------------------------------------------------------------------------
+#
+# 1) yt-dlp (el descargador). Está empaquetado en Fedora:
+#
+#       sudo dnf install -y yt-dlp
+#
+#    pero la versión de los repositorios puede ir por detrás y no trae los
+#    componentes "yt-dlp-ejs" (necesarios para el reto JS de YouTube) ni
+#    "secretstorage" (necesario para descifrar las cookies del navegador).
+#    Lo recomendado es instalarlo en un virtualenv propio, junto a gallery-dl:
+#
+#       sudo dnf install -y python3 python3-pip
+#       python3 -m venv ~/.local/share/gallery-dl-venv
+#       ~/.local/share/gallery-dl-venv/bin/pip install -U \
+#           gallery-dl yt-dlp yt-dlp-ejs secretstorage
+#
+#    Si ya existe ese venv (porque gallery-dl está instalado), basta con:
+#
+#       ~/.local/share/gallery-dl-venv/bin/pip install -U yt-dlp yt-dlp-ejs secretstorage
+#
+# 2) ffmpeg (unir vídeo+audio, convertir a mp4, extraer el audio):
+#
+#       sudo dnf install -y ffmpeg          # está en RPM Fusion free
+#    Sin RPM Fusion:  sudo dnf install -y ffmpeg-free
+#
+# 3) Deno (runtime JavaScript). YouTube exige resolver un reto JS ("n
+#    challenge") cuando se usan cookies de una cuenta con sesión iniciada.
+#    Sin Deno sólo se obtienen los storyboards (miniaturas).
+#    Deno NO está en los repositorios de Fedora; se instala desde su web:
+#
+#       curl -fsSL https://deno.land/install.sh | sh
+#
+#    o manualmente:
+#       curl -fsSL -o deno.zip \
+#         https://dl.deno.land/release/latest/deno-x86_64-unknown-linux-gnu.zip
+#       unzip deno.zip && mkdir -p ~/.local/bin && mv deno ~/.local/bin/
+#
+#    Alternativa: Node.js, que sí está en Fedora
+#       sudo dnf install -y nodejs
+#    (en ese caso habría que añadir --js-runtimes node a yt-dlp)
+#
+# 4) Cookies del navegador (vídeos con restricción de edad, de miembros,
+#    o cuentas Premium). Requiere:
+#       - Brave/Chrome abierto al menos una vez con tu cuenta
+#       - el keyring de GNOME desbloqueado (normalmente con la sesión iniciada)
+#       - python3-secretstorage (pip, ver el punto 1) para descifrar las cookies
+#
+# 5) gallery-dl (opcional). Si también quieres descargar con gallery-dl, ese
+#    programa usa el extractor genérico "ytdl:", que delega en yt-dlp:
+#
+#       gallery-dl "ytdl:https://www.youtube.com/watch?v=XXXX"
+#
+#    Hay que instalar yt-dlp y yt-dlp-ejs en el MISMO intérprete de Python
+#    que usa gallery-dl (el venv del punto 1).
+# ---------------------------------------------------------------------------
+
+set -euo pipefail
+
+CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/evilnagi-gnome-team/descargas.conf"
+# shellcheck disable=SC1090
+[[ -f $CONFIG ]] && . "$CONFIG"
+NAVEGADOR="${NAVEGADOR:-brave}"
+
+VENV="$HOME/.local/share/gallery-dl-venv"
+YTDLP=""
+DEST=""
+AUDIO=""
+QUALITY="best"
+USE_COOKIES=1
+LIST_ONLY=0
+SIMULATE=0
+FORCE=0
+
+# El sufijo "+gnomekeyring" es imprescindible en los navegadores de Chromium:
+# sin él, yt-dlp elige el keyring "BASICTEXT" cuando se ejecuta desde una
+# terminal sin XDG_CURRENT_DESKTOP=GNOME (cron, ssh, tmux...) y no puede
+# descifrar las cookies v11 de Brave/Chrome.
+if [[ $NAVEGADOR == firefox ]]; then
+    COOKIE_SPEC="firefox"
+else
+    COOKIE_SPEC="$NAVEGADOR+gnomekeyring"
+fi
+
+SEP=$'\x1f'
+
+usage() {
+    # Imprime la sección de uso (los comentarios hasta la línea separadora).
+    sed -n '2,/^# ----/p' "$0" | sed 's/^# \{0,1\}//' | sed '$d'
+}
+
+die() { echo "Error: $*" >&2; exit 1; }
+
+# --- localizar yt-dlp -------------------------------------------------------
+find_ytdlp() {
+    # Se prefiere siempre el yt-dlp del entorno virtual: es el único que trae
+    # yt-dlp-ejs (reto de YouTube) y secretstorage (descifrar cookies del navegador).
+    # El de dnf o el de ~/.local/bin suelen ir sin esas piezas y fallan con las cookies.
+    if [[ ! -x "$VENV/bin/yt-dlp" ]]; then
+        echo "yt-dlp no está en $VENV; instalándolo ..."
+        python3 -m venv "$VENV" 2>/dev/null || true
+        "$VENV/bin/pip" install -q -U yt-dlp yt-dlp-ejs secretstorage
+    fi
+    if [[ -x "$VENV/bin/yt-dlp" ]]; then
+        YTDLP="$VENV/bin/yt-dlp"
+    elif command -v yt-dlp >/dev/null 2>&1; then
+        YTDLP="$(command -v yt-dlp)"
+        echo "AVISO: se usa el yt-dlp del sistema ($YTDLP); si no lee las cookies, instala yt-dlp-ejs y secretstorage." >&2
+    else
+        die "no se pudo localizar yt-dlp"
+    fi
+    [[ -x "$YTDLP" ]] || die "no se pudo localizar yt-dlp"
+}
+
+# --- opciones ---------------------------------------------------------------
+ARGCOUNT=$#
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -d|--dest)       DEST="${2:-}"; shift 2 ;;
+        -a|--audio)      AUDIO="${2:-}"; shift 2 ;;
+        -q|--quality)    QUALITY="${2:-}"; shift 2 ;;
+        -n|--no-cookies) USE_COOKIES=0; shift ;;
+        --list)          LIST_ONLY=1; shift ;;
+        -s|--simulate)   SIMULATE=1; shift ;;
+        --force)         FORCE=1; shift ;;
+        -h|--help)       usage; exit 0 ;;
+        --)              shift; break ;;
+        -*)              die "opción desconocida: $1 (usa -h para ver la ayuda)" ;;
+        *)               break ;;
+    esac
+done
+if [[ $# -eq 0 ]]; then
+    if [[ $ARGCOUNT -eq 0 ]]; then
+        # Sin nada: se muestra la ayuda (no es un error).
+        usage
+        exit 0
+    fi
+    usage >&2
+    exit 1
+fi
+URL="$1"
+
+case "$AUDIO" in
+    ""|mp3|ogg) ;;
+    *) die "formato de audio no soportado: $AUDIO (usa mp3 u ogg)" ;;
+esac
+case "$QUALITY" in
+    best|h264) ;;
+    *) die "calidad no soportada: $QUALITY (usa best u h264)" ;;
+esac
+
+find_ytdlp
+
+# Deno debe estar en el PATH; yt-dlp lo busca solo para resolver el reto JS.
+export PATH="$HOME/.local/bin:$PATH"
+
+COOKIE_ARGS=()
+[[ $USE_COOKIES -eq 1 ]] && COOKIE_ARGS=(--cookies-from-browser "$COOKIE_SPEC")
+
+# --- carpeta de destino por defecto ------------------------------------------
+if [[ -z $DEST ]]; then
+    DEST="$(xdg-user-dir VIDEOS 2>/dev/null || true)"
+    [[ -n $DEST && $DEST != "$HOME" ]] || DEST="$HOME/Videos"
+fi
+mkdir -p "$DEST"
+
+# --- registro de descargas (SQLite) -------------------------------------------
+# yt-dlp sólo admite registros en texto plano, así que el control se hace aquí
+# con una base SQLite, con el mismo esquema que usa gallery-dl:
+#   CREATE TABLE archive (entry TEXT PRIMARY KEY)
+# Las claves se prefijan para que el vídeo, el mp3 y el ogg de un mismo vídeo
+# sean tres entradas distintas en el registro.
+ARCHIVE_DB="$DEST/.archive.sqlite3"
+if [[ -n $AUDIO ]]; then
+    ARCHIVE_PREFIX="a:$AUDIO:"
+else
+    ARCHIVE_PREFIX="v:"
+fi
+
+# El programa va en una variable (no en un heredoc) para que la entrada
+# estándar quede libre para los datos.
+ARCHIVE_PY=$(cat <<'PY'
+import sqlite3, sys
+
+db, prefix, mode = sys.argv[1], sys.argv[2], sys.argv[3]
+con = sqlite3.connect(db, timeout=60)
+try:
+    con.execute("CREATE TABLE IF NOT EXISTS archive "
+                "(entry TEXT PRIMARY KEY) WITHOUT ROWID")
+except sqlite3.OperationalError:
+    con.execute("CREATE TABLE IF NOT EXISTS archive "
+                "(entry TEXT PRIMARY KEY)")
+con.commit()
+cur = con.cursor()
+
+
+def archivado(ident):
+    return cur.execute("SELECT 1 FROM archive WHERE entry=?",
+                       (prefix + ident,)).fetchone() is not None
+
+
+if mode == "filter":
+    for line in sys.stdin:
+        line = line.rstrip("\n")
+        if line and not archivado(line.split("\t", 1)[0]):
+            print(line)
+elif mode == "add":
+    rows = []
+    for line in sys.stdin:
+        ident = line.strip().split("\t", 1)[0]
+        if ident:
+            rows.append((prefix + ident,))
+    if rows:
+        cur.executemany("INSERT OR IGNORE INTO archive (entry) VALUES (?)", rows)
+        con.commit()
+PY
+)
+
+archive() {
+    # uso: archive filter|add   (las entradas llegan por stdin)
+    #   filter -> imprime las líneas que NO están en el registro
+    #   add    -> añade las claves al registro
+    # Las líneas son "id" o "id<TAB>url".
+    python3 -c "$ARCHIVE_PY" "$ARCHIVE_DB" "$ARCHIVE_PREFIX" "$1"
+}
+
+if [[ $LIST_ONLY -eq 1 ]]; then
+    exec "$YTDLP" "${COOKIE_ARGS[@]}" -F "$URL"
+fi
+
+# --- detección del tipo de URL ------------------------------------------------
+TMPJSON="$(mktemp)"
+TMPJSON2="$(mktemp)"
+ENTRIES="$(mktemp)"
+PENDING="$(mktemp)"
+BATCHFILE="$(mktemp)"
+PRINTFILE="$(mktemp)"
+IDFILE="$(mktemp)"
+trap 'rm -f "$TMPJSON" "$TMPJSON2" "$ENTRIES" "$PENDING" "$BATCHFILE" "$PRINTFILE" "$IDFILE"' EXIT
+
+"$YTDLP" "${COOKIE_ARGS[@]}" -J --flat-playlist --no-warnings "$URL" \
+    >"$TMPJSON" 2>/dev/null || die "no se pudo obtener información de: $URL"
+
+DET="$(python3 - "$TMPJSON" "$SEP" <<'PY'
+import json, re, sys
+
+path, sep = sys.argv[1], sys.argv[2]
+try:
+    with open(path, encoding="utf-8") as fp:
+        d = json.load(fp)
+except Exception:
+    print(sep.join(["video", "", "0", "", ""]))
+    sys.exit(0)
+
+tipo = d.get("_type") or "video"
+url = d.get("original_url") or d.get("webpage_url") or ""
+
+if tipo != "playlist":
+    print(sep.join(["video", d.get("title") or "", "1", "", d.get("id") or ""]))
+    sys.exit(0)
+
+# ¿URL de canal? (/@canal, /channel/UC..., /c/nombre, /user/nombre)
+if re.search(r"youtube\.com/(channel/|c/|user/|u/|@)", url):
+    nombre = d.get("channel") or d.get("uploader") or d.get("title") or "canal"
+    final = url
+    if not re.search(r"/(videos|shorts|streams|playlists|featured)/?$", url):
+        final = url.rstrip("/") + "/videos"
+    print(sep.join(["canal", nombre, "0", final, ""]))
+else:
+    nombre = d.get("title") or d.get("playlist_title") or "playlist"
+    n = d.get("playlist_count")
+    if n is None:
+        n = len(d.get("entries") or [])
+    print(sep.join(["lista", nombre, str(n), "", ""]))
+PY
+)"
+
+IFS="$SEP" read -r TIPO NOMBRE COUNT FINAL_URL VID <<<"$DET"
+
+# Las entradas (id + url) de lo que hay que descargar.
+if [[ $TIPO == "canal" ]]; then
+    # Sólo el canal necesita cambiar la URL (a su pestaña de vídeos).
+    if [[ -z $FINAL_URL ]]; then
+        FINAL_URL="${URL%/}/videos"
+    fi
+    "$YTDLP" "${COOKIE_ARGS[@]}" -J --flat-playlist --no-warnings \
+        "$FINAL_URL" >"$TMPJSON2" 2>/dev/null || die "no se pudo leer el canal"
+    ENTRIES_JSON="$TMPJSON2"
+else
+    [[ -n $FINAL_URL ]] || FINAL_URL="$URL"
+    ENTRIES_JSON="$TMPJSON"
+fi
+
+python3 - "$ENTRIES_JSON" "$TIPO" "$URL" "$VID" >"$ENTRIES" <<'PY'
+import json, sys
+
+path, tipo, url, vid = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+try:
+    with open(path, encoding="utf-8") as fp:
+        d = json.load(fp)
+except Exception:
+    sys.exit(0)
+
+if tipo == "video":
+    if vid:
+        print("%s\t%s" % (vid, url))
+    sys.exit(0)
+
+for e in (d.get("entries") or []):
+    if not e:
+        continue
+    ident = e.get("id")
+    if not ident:
+        continue
+    link = e.get("url") or e.get("webpage_url")
+    if not link:
+        link = "https://www.youtube.com/watch?v=" + ident
+    print("%s\t%s" % (ident, link))
+PY
+
+# Cuántos hay y cuántos ya estaban descargados.
+TOTAL_ENTRIES="$(wc -l <"$ENTRIES")"
+if [[ $FORCE -eq 1 ]]; then
+    cp "$ENTRIES" "$PENDING"
+else
+    archive filter <"$ENTRIES" >"$PENDING"
+fi
+PEND_N="$(wc -l <"$PENDING")"
+
+# --- subcarpeta de destino según el tipo -------------------------------------
+sanear() {
+    echo "$1" | tr '/\\:*?"<>|' '_' | sed 's/  */ /g; s/^ *//; s/ *$//' | cut -c1-80
+}
+
+TARGET="$DEST"
+if [[ $TIPO == "canal" || $TIPO == "lista" ]]; then
+    TARGET="$DEST/$(sanear "$NOMBRE")"
+fi
+mkdir -p "$TARGET"
+
+case "$TIPO" in
+    canal) echo ">> Canal: $NOMBRE ($TOTAL_ENTRIES vídeos, $PEND_N nuevos)" ;;
+    lista) echo ">> Playlist: $NOMBRE ($TOTAL_ENTRIES vídeos, $PEND_N nuevos)" ;;
+    *)     echo ">> Vídeo: $NOMBRE" ;;
+esac
+echo ">> Destino: $TARGET"
+
+if [[ $PEND_N -eq 0 && $FORCE -eq 0 ]]; then
+    echo ">> Ya estaba descargado; no hay nada que hacer."
+    exit 0
+fi
+
+# --- formato de descarga ------------------------------------------------------
+if [[ -n $AUDIO ]]; then
+    case "$AUDIO" in
+        mp3) AUDIO_ARGS=(-x --audio-format mp3 --audio-quality 0) ;;
+        ogg) AUDIO_ARGS=(-x --audio-format vorbis --audio-quality 5) ;;
+    esac
+    FORMAT_ARGS=()
+else
+    case "$QUALITY" in
+        # best: mejor vídeo disponible + mejor audio m4a, fusionados a mp4.
+        # Si el vídeo sólo ofrece webm/mkv, cae al final de la cadena y el
+        # propio script lo convierte a mp4 con ffmpeg.
+        best) FORMAT_ARGS=(-f "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b"
+                           --merge-output-format mp4) ;;
+        # h264: mp4 con h264, la máxima compatibilidad con reproductores
+        h264) FORMAT_ARGS=(-f "bv*[ext=mp4][vcodec^=avc1]+ba[ext=m4a]/b[ext=mp4][vcodec^=avc1]"
+                           --merge-output-format mp4) ;;
+    esac
+    AUDIO_ARGS=()
+fi
+
+# --- descarga ------------------------------------------------------------------
+# Un vídeo suelto se descarga por URL; las listas y canales, entrada a entrada
+# (así se pueden descartar los ya descargados con el registro SQLite).
+URL_ARGS=()
+if [[ $TIPO == "video" ]]; then
+    URL_ARGS=("$URL")
+else
+    cut -f2 "$PENDING" >"$BATCHFILE"
+    URL_ARGS=(--batch-file "$BATCHFILE")
+fi
+
+SIM_ARGS=()
+if [[ $SIMULATE -eq 1 ]]; then
+    # No descarga nada: sólo enumera lo que se descargaría.
+    SIM_ARGS=(--simulate --flat-playlist --print "%(id)s  %(title)s")
+fi
+
+"$YTDLP" "${COOKIE_ARGS[@]}" \
+    "${FORMAT_ARGS[@]}" "${AUDIO_ARGS[@]}" "${SIM_ARGS[@]}" \
+    "${URL_ARGS[@]}" \
+    --paths "home:$TARGET" \
+    --output "%(title)s [%(id)s].%(ext)s" \
+    --no-overwrites \
+    --ignore-errors \
+    --print-to-file "after_move:filepath" "$PRINTFILE" \
+    --print-to-file "after_move:id" "$IDFILE"
+
+# --- registro de lo descargado ------------------------------------------------
+if [[ $SIMULATE -eq 0 ]]; then
+    archive add <"$IDFILE" >/dev/null
+fi
+
+if [[ $SIMULATE -eq 1 ]]; then
+    echo ">> Simulación: no se ha descargado nada."
+    exit 0
+fi
+
+# --- conversión a mp4 si el resultado no es mp4 --------------------------------
+if [[ -z $AUDIO ]]; then
+    while IFS= read -r archivo; do
+        [[ -n $archivo && -f $archivo ]] || continue
+        if [[ $archivo == *.mp4 ]]; then
+            continue
+        fi
+        destino_mp4="${archivo%.*}.mp4"
+        echo ">> Convirtiendo a mp4: $(basename "$archivo")"
+        if ffmpeg -hide_banner -loglevel error -y -i "$archivo" \
+            -c:v libx264 -preset medium -crf 20 \
+            -c:a aac -b:a 192k -movflags +faststart "$destino_mp4" 2>/dev/null; then
+            rm -f "$archivo"
+            echo "   OK -> $(basename "$destino_mp4")"
+        else
+            echo "   No se pudo convertir; se conserva el original" >&2
+            rm -f "$destino_mp4"
+        fi
+    done <"$PRINTFILE"
+fi
+
+# Recuento de lo descargado en esta ejecución.
+TOTAL=0
+while IFS= read -r archivo; do
+    if [[ -n $archivo && -f $archivo ]]; then
+        TOTAL=$((TOTAL + 1))
+    fi
+done <"$PRINTFILE"
+
+echo ">> Listo: $TOTAL archivo(s) en $TARGET"

@@ -1,0 +1,7 @@
+{
+  "uuid": "transparencias@pandi.local",
+  "name": "Transparencias",
+  "description": "Botón en Ajustes rápidos para la opacidad y el blur de Nautilus y Ptyxis. El blur lo hace Blur my Shell; la opacidad de Nautilus la aplica la extensión de nautilus-python opacidad-nautilus.py.",
+  "settings-schema": "org.gnome.shell.extensions.transparencias",
+  "shell-version": ["46", "47", "48", "49", "50"]
+}

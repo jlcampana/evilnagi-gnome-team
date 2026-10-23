@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# twitter - Lee las URLs de listas.md y lanza xdl -v URL para cada una.
+set -euo pipefail
+
+CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/evilnagi-gnome-team/descargas.conf"
+# shellcheck disable=SC1090
+[[ -f $CONFIG ]] && . "$CONFIG"
+DESCARGAS_DIR="${DESCARGAS_DIR:-$(xdg-user-dir DOWNLOAD 2>/dev/null || echo "$HOME/Descargas")}"
+
+LISTA="${TWITTER_LISTA:-$DESCARGAS_DIR/twitter/listas.md}"
+
+if [[ ! -f "$LISTA" ]]; then
+    echo "No se encuentra el fichero de listas: $LISTA" >&2
+    exit 1
+fi
+
+if ! command -v xdl >/dev/null 2>&1; then
+    echo "xdl no está en el PATH" >&2
+    exit 1
+fi
+
+# Leer el título (primera línea con '#') solo para mostrarlo
+titulo="$(grep -m1 '^#' "$LISTA" || true)"
+[[ -n "$titulo" ]] && echo "Lista: ${titulo#\# }"
+
+# Cada entrada es una línea con una URL; ignoramos títulos, líneas en blanco y comentarios
+total=0
+while IFS= read -r url; do
+    total=$((total + 1))
+    echo "-> [$total] $url"
+    xdl -v "$url"
+done < <(grep -oE 'https?://[^[:space:])>]+' "$LISTA")
+
+if [[ "$total" -eq 0 ]]; then
+    echo "No se encontraron URLs en $LISTA" >&2
+    exit 1
+fi
+
+echo "Hecho: $total URLs procesadas."

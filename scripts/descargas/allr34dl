@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+# Aplica r34dl a todas las URLs de una lista en markdown (tipo lista.md).
+# Cada URL se pasa a r34dl tal cual (con comillas), así que el 'tags=' de la
+# URL decide en qué carpeta se guarda cada cosa.
+#
+# Es reanudable: r34dl guarda lo ya descargado en .archive.sqlite3, así que
+# si se corta y se vuelve a lanzar, sigue donde lo dejó.
+#
+# Uso: allr34dl [-f lista] [-n N] [-p P] [-t N] [-c fichero] [-d carpeta] [-v] [-H] [-y] [-l]
+set -euo pipefail
+
+CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/evilnagi-gnome-team/descargas.conf"
+# shellcheck disable=SC1090
+[[ -f $CONFIG ]] && . "$CONFIG"
+DESCARGAS_DIR="${DESCARGAS_DIR:-$(xdg-user-dir DOWNLOAD 2>/dev/null || echo "$HOME/Descargas")}"
+
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+R34DL="$SCRIPT_DIR/r34dl"
+LISTA="${ALLR34_LISTA:-$DESCARGAS_DIR/r34/lista.md}"
+DESTINATION_DIR="$DESCARGAS_DIR/r34"
+LOG="$DESTINATION_DIR/allr34dl.log"
+
+usage() {
+    cat <<EOF
+Uso: $(basename "$0") [-f lista] [-n N] [-p P] [-t N] [-c fichero] [-d carpeta] [-v] [-H] [-y] [-l]
+
+  -f fichero   Lista de URLs en markdown (por defecto: $LISTA)
+  -n N         Límite de imágenes por URL (lo pasa a r34dl)
+  -p P         Límite de páginas por URL (lo pasa a r34dl)
+  -t N         Parar tras N seguidas ya descargadas (lo pasa a r34dl)
+  -c fichero   Fichero de tags vetados (lo pasa a r34dl)
+  -d carpeta   Carpeta de destino (lo pasa a r34dl; por defecto, una por tags)
+  -v           Descargar también los vídeos
+  -H           Forzar el raspado HTML en vez del API
+  -y           No preguntar nada antes de empezar
+  -l           Solo listar las URLs de la lista y salir
+  -h           Mostrar esta ayuda
+
+Ejemplos:
+  $(basename "$0")                       # toda la lista, sin límites
+  $(basename "$0") -n 50                 # 50 imágenes de cada etiqueta
+  $(basename "$0") -l                    # ver solo las URLs
+  $(basename "$0") -f ~/otra-lista.md -p 2
+
+Sin -n ni -p se descarga todo lo que haya de cada etiqueta, que puede ser
+muchísimo (una sola etiqueta puede tener miles de posts), así que pregunta
+antes de empezar (salvo -y).
+EOF
+}
+
+list="$LISTA"
+videos=false
+html=false
+limit=""
+pages=""
+stop_skips=""
+banfile=""
+dest=""
+assume_yes=false
+only_list=false
+
+while getopts ":f:n:p:t:c:d:vHylh" opt; do
+    case $opt in
+        f) list="$OPTARG" ;;
+        n) limit="$OPTARG" ;;
+        p) pages="$OPTARG" ;;
+        t) stop_skips="$OPTARG" ;;
+        c) banfile="$OPTARG" ;;
+        d) dest="$OPTARG" ;;
+        v) videos=true ;;
+        H) html=true ;;
+        y) assume_yes=true ;;
+        l) only_list=true ;;
+        h) usage; exit 0 ;;
+        :) echo "La opción -$OPTARG necesita un argumento" >&2; exit 1 ;;
+        *) usage >&2; exit 1 ;;
+    esac
+done
+shift $((OPTIND - 1))
+
+for v in "$limit" "$pages" "$stop_skips"; do
+    [[ -z $v || $v =~ ^[0-9]+$ ]] || { echo "Los números deben ser enteros no negativos" >&2; exit 1; }
+done
+
+[[ -x $R34DL ]] || { echo "No encuentro el script r34dl en $R34DL" >&2; exit 1; }
+[[ -f $list ]] || { echo "No existe la lista: $list" >&2; exit 1; }
+
+# --- URLs de la lista: líneas "- https://..." o URLs sueltas; '#' es comentario
+mapfile -t urls < <(sed -E '/^[[:space:]]*#/d' "$list" \
+    | grep -oE 'https?://[^[:space:])>,"]+' | sed -E 's/[.,;]+$//')
+
+total=${#urls[@]}
+(( total > 0 )) || { echo "La lista no tiene ninguna URL: $list" >&2; exit 1; }
+
+if [[ $only_list == true ]]; then
+    printf '%s\n' "${urls[@]}"
+    exit 0
+fi
+
+echo "Lista: $list ($total URLs)"
+if [[ $assume_yes == false && -z $limit && -z $pages ]]; then
+    cat <<EOF
+
+Sin límite de imágenes ni de páginas se descarga TODO lo que haya de cada
+etiqueta (una sola puede tener miles de posts) y el disco puede llenarse.
+
+EOF
+    read -rp "¿Continuar? [s/N] " resp
+    [[ $resp == [sSyY] ]] || { echo "Cancelado."; exit 0; }
+fi
+
+args=()
+[[ $videos == true ]] && args+=(-v)
+[[ $html == true ]] && args+=(-H)
+[[ -n $limit ]] && args+=(-n "$limit")
+[[ -n $pages ]] && args+=(-p "$pages")
+[[ -n $stop_skips ]] && args+=(-t "$stop_skips")
+[[ -n $banfile ]] && args+=(-c "$banfile")
+[[ -n $dest ]] && args+=(-d "$dest")
+
+# --- helpers ---
+urldecode() { python3 -c 'import sys, urllib.parse; print(urllib.parse.unquote_plus(sys.argv[1]))' "$1"; }
+
+# carpeta donde acabarían los archivos de una URL (como decide r34dl)
+dest_for() {
+    local url="$1" tags folder
+    if [[ -n $dest ]]; then echo "$dest"; return; fi
+    tags=$(sed -nE 's/.*[?&]tags=([^&]+).*/\1/p' <<<"$url")
+    if [[ -z $tags ]]; then echo "$DESTINATION_DIR/posts"; return; fi
+    tags=$(urldecode "$tags")
+    folder=${tags// /_}
+    folder=${folder//\//_}
+    echo "$DESTINATION_DIR/$folder"
+}
+
+count_files() {
+    local d="$1"
+    [[ -d $d ]] || { echo 0; return; }
+    find "$d" -maxdepth 1 -type f ! -name '.*' | wc -l
+}
+
+mkdir -p "$DESTINATION_DIR"
+fallos=0
+ok=0
+iniciados=0
+
+for i in "${!urls[@]}"; do
+    url="${urls[$i]}"
+    carpeta=$(dest_for "$url")
+    antes=$(count_files "$carpeta")
+    n=$((i + 1))
+
+    echo
+    echo "=== [$n/$total] $url"
+    echo "    -> $carpeta"
+
+    if "$R34DL" "${args[@]}" "$url"; then
+        despues=$(count_files "$carpeta")
+        nuevas=$((despues - antes))
+        echo "    OK: +$nuevas (total $despues en la carpeta)"
+        ok=$((ok + 1))
+        printf '%s\tOK\t%s\t%s\n' "$(date '+%F %T')" "$url" "$nuevas" >> "$LOG"
+    else
+        rc=$?
+        echo "    FALLO (código $rc): $url" >&2
+        fallos=$((fallos + 1))
+        printf '%s\tFALLO(%s)\t%s\n' "$(date '+%F %T')" "$rc" "$url" >> "$LOG"
+    fi
+    iniciados=$((iniciados + 1))
+done
+
+echo
+echo "Resumen: $ok correctas, $fallos fallidas (de $total)"
+echo "Log: $LOG"
+(( fallos == 0 ))

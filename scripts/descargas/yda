@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# yda - Descarga sólo el AUDIO de YouTube (mp3 u ogg).
+#
+# Es una-envoltura de ydl: llama a ydl pasándole el parámetro de audio.
+# Toda la detección (vídeo / playlist / canal) y las opciones las hace ydl.
+#
+# Uso:
+#   yda [opciones] <url>
+#
+# Opciones:
+#   -f, --format FMT    Formato del audio: mp3 (por defecto) u ogg
+#   -d, --dest DIR      Carpeta de destino (por defecto: ~/.Vídeos)
+#   -n, --no-cookies    No usar las cookies del navegador
+#       --force         Ignorar el registro de descargas y volver a bajar todo
+#   -h, --help          Mostrar esta ayuda
+#
+# El registro de descargas es la base SQLite <destino>/.archive.sqlite3
+# (misma tabla que usa gallery-dl), con una clave distinta para mp3 y ogg.
+#
+# Ejemplos:
+#   yda https://youtu.be/dQw4w9WgXcQ            -> mp3
+#   yda -f ogg https://youtu.be/dQw4w9WgXcQ     -> ogg
+#   yda -f mp3 -d ~/Música https://www.youtube.com/@canal
+#
+# ---------------------------------------------------------------------------
+# DEPENDENCIAS (Fedora)
+# ---------------------------------------------------------------------------
+# Las mismas que ydl. Resumen:
+#
+#   sudo dnf install -y python3 python3-pip ffmpeg
+#   python3 -m venv ~/.local/share/gallery-dl-venv
+#   ~/.local/share/gallery-dl-venv/bin/pip install -U \
+#       gallery-dl yt-dlp yt-dlp-ejs secretstorage
+#
+#   # Deno (runtime JS, necesario para YouTube con cookies): no está en los
+#   # repos de Fedora, se instala desde https://deno.land
+#   curl -fsSL https://deno.land/install.sh | sh
+#
+# Ver la cabecera de ydl para el detalle completo.
+# ---------------------------------------------------------------------------
+
+set -euo pipefail
+
+FORMATO="mp3"
+DEST=""
+PASAR_NO_COOKIES=0
+FORCE=0
+
+usage() {
+    # Imprime la sección de uso (los comentarios hasta la línea separadora).
+    sed -n '2,/^# ----/p' "$0" | sed 's/^# \{0,1\}//' | sed '$d'
+}
+
+die() { echo "Error: $*" >&2; exit 1; }
+
+ARGCOUNT=$#
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -f|--format)    FORMATO="${2:-}"; shift 2 ;;
+        -d|--dest)      DEST="${2:-}"; shift 2 ;;
+        -n|--no-cookies) PASAR_NO_COOKIES=1; shift ;;
+        --force)         FORCE=1; shift ;;
+        -h|--help)      usage; exit 0 ;;
+        --)             shift; break ;;
+        -*)             die "opción desconocida: $1 (usa -h para ver la ayuda)" ;;
+        *)              break ;;
+    esac
+done
+if [[ $# -eq 0 ]]; then
+    if [[ $ARGCOUNT -eq 0 ]]; then
+        # Sin nada: se muestra la ayuda (no es un error).
+        usage
+        exit 0
+    fi
+    usage >&2
+    exit 1
+fi
+
+case "$FORMATO" in
+    mp3|ogg) ;;
+    *) die "formato no soportado: $FORMATO (usa mp3 u ogg)" ;;
+esac
+
+# Localizar ydl: primero en el PATH, luego junto a este script.
+YDL=""
+if command -v ydl >/dev/null 2>&1; then
+    YDL="$(command -v ydl)"
+elif [[ -x "$(dirname "$(readlink -f "$0")")/ydl" ]]; then
+    YDL="$(dirname "$(readlink -f "$0")")/ydl"
+else
+    die "no se encuentra ydl (debe estar en el PATH o en el mismo directorio)"
+fi
+
+ARGS=(-a "$FORMATO")
+[[ -n $DEST ]] && ARGS+=(-d "$DEST")
+[[ $PASAR_NO_COOKIES -eq 1 ]] && ARGS+=(-n)
+[[ $FORCE -eq 1 ]] && ARGS+=(--force)
+
+exec "$YDL" "${ARGS[@]}" "$@"

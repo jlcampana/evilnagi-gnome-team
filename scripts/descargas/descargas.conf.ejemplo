@@ -1,0 +1,28 @@
+# Configuración de los scripts de descarga (ydl, yda, xdl, twitter, r34dl, allr34dl)
+# Este archivo se lee al arrancar los scripts. Los valores de abajo son los de
+# por defecto; descomenta y cambia lo que quieras.
+
+# Carpeta base de las descargas (si no existe se crea)
+DESCARGAS_DIR="${DESCARGAS_DIR:-$HOME/Descargas}"
+
+# Navegador del que se leen las cookies (brave, chrome, chromium, firefox…)
+NAVEGADOR="${NAVEGADOR:-brave}"
+
+# --- X / Twitter (xdl y twitter) -----------------------------------------
+# Carpeta de xdl: si no se pasa -d, se usa $DESCARGAS_DIR/twitter/<usuario>
+# Lista de URLs que procesa `twitter`:
+TWITTER_LISTA="${TWITTER_LISTA:-$DESCARGAS_DIR/twitter/listas.md}"
+
+# --- rule34 (r34dl y allr34dl) -------------------------------------------
+# El API de rule34.xxx pide credenciales para algunas consultas. Se sacan de
+# https://rule34.xxx/index.php?page=account&s=options ("Generate New Key?").
+# R34_API_KEY=""
+# R34_USER_ID=""
+# Fichero con tags vetados (una expresión por línea; # para comentarios):
+# R34DL_CONFIG="$HOME/.config/r34dl/banned-tags.txt"
+# Lista de URLs que procesa `allr34dl`:
+ALLR34_LISTA="${ALLR34_LISTA:-$DESCARGAS_DIR/r34/lista.md}"
+
+# --- tracker --------------------------------------------------------------
+# Carpeta de la biblioteca local de módulos (por defecto: Música/Tracker)
+# TRACKER_DIR="${TRACKER_DIR:-$(xdg-user-dir MUSIC 2>/dev/null || echo "$HOME/Música")/Tracker}"

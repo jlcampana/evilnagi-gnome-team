@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+*.pyo
+.sync-nuevo/
+.venv/
+venv/
+*.bak
+*.tmp
+*.zip

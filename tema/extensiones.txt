@@ -1,0 +1,35 @@
+# Extensiones de GNOME del tema.
+# Formato: <uuid> <activa|inactiva> <usuario|sistema>
+#
+# - usuario: se instala desde extensions.gnome.org si falta.
+# - sistema: viene con la distro (gnome-shell-extensions); si no está, se salta.
+# - *@pandi.local: extensiones propias del tema; las crean sus scripts y aquí
+#   solo se activan o desactivan.
+# - Dash to Dock no se instala en Ubuntu (chocaría con Ubuntu Dock, que usa los
+#   mismos ajustes: el dock queda igual).
+appindicatorsupport@rgcjonas.gmail.com activa sistema
+ubuntu-appindicators@ubuntu.com activa sistema
+advanced-media-controller@sanjai.com activa usuario
+barra-nautilus@pandi.local activa usuario
+blur-my-shell@aunetx inactiva usuario
+boton-aplicaciones@pandi.local activa usuario
+botones-sesion@pandi.local activa usuario
+clic-bandeja@pandi.local activa usuario
+clipboard-indicator@tudmotu.com activa usuario
+dash-to-dock@micxgx.gmail.com activa usuario
+ding@rastersoft.com activa usuario
+drive-menu@gnome-shell-extensions.gcampax.github.com activa sistema
+just-perfection-desktop@just-perfection activa usuario
+launch-new-instance@gnome-shell-extensions.gcampax.github.com inactiva sistema
+mediacontrols@cliffniff.github.com inactiva usuario
+p7-borders@prasannavl.com activa usuario
+places-menu@gnome-shell-extensions.gcampax.github.com inactiva sistema
+search-light@icedman.github.com inactiva usuario
+soft-brightness-plus@joelkitching.com activa usuario
+status-area-horizontal-spacing@mathematical.coffee.gmail.com activa usuario
+top-bar-organizer@julian.gse.jsts.xyz activa usuario
+topbar-weather@datamares.netlify.app activa usuario
+transparencias@pandi.local activa usuario
+user-theme@gnome-shell-extensions.gcampax.github.com inactiva sistema
+Vitals@CoreCoding.com activa usuario
+window-list@gnome-shell-extensions.gcampax.github.com inactiva sistema

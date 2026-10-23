@@ -1,0 +1,188 @@
+# Ajustes de las extensiones (se cargan con: dconf load /org/gnome/shell/extensions/)
+# Recortado del equipo original: sin rutas personales ni monitores concretos.
+
+[appindicator]
+icon-brightness=0.0
+icon-contrast=0.0
+icon-opacity=240
+icon-saturation=0.0
+icon-size=0
+tray-pos='right'
+
+[blur-my-shell]
+rounded-blur-found=false
+settings-version=2
+
+[blur-my-shell/appfolder]
+brightness=0.59999999999999998
+sigma=30
+style-dialogs=1
+
+[blur-my-shell/applications]
+blur=true
+blur-on-overview=false
+customize=true
+dynamic-opacity=false
+enable-all=false
+opacity=255
+sigma=21
+whitelist=['org.gnome.Nautilus', 'org.gnome.Ptyxis']
+
+[blur-my-shell/coverflow-alt-tab]
+pipeline='pipeline_default'
+
+[blur-my-shell/dash-to-dock]
+blur=false
+brightness=0.59999999999999998
+pipeline='pipeline_default_rounded'
+sigma=30
+static-blur=true
+style-dash-to-dock=0
+
+[blur-my-shell/lockscreen]
+pipeline='pipeline_default'
+
+[blur-my-shell/overview]
+pipeline='pipeline_default'
+style-components=2
+
+[blur-my-shell/panel]
+blur=false
+brightness=0.59999999999999998
+override-background=false
+pipeline='pipeline_default'
+sigma=30
+
+[blur-my-shell/screenshot]
+pipeline='pipeline_default'
+
+[blur-my-shell/window-list]
+brightness=0.59999999999999998
+sigma=30
+
+[clipboard-indicator]
+next-history-clear=-1
+
+[dash-to-dock]
+always-center-icons=false
+apply-custom-theme=false
+background-color='rgb(46,46,50)'
+background-opacity=0.94999999999999996
+click-action='previews'
+custom-background-color=true
+custom-theme-shrink=true
+dash-max-icon-size=32
+disable-overview-on-startup=true
+dock-fixed=true
+dock-position='LEFT'
+extend-height=true
+height-fraction=0.90000000000000002
+hide-tooltip=true
+hot-keys=false
+icon-size-fixed=true
+show-apps-always-in-the-edge=false
+show-apps-at-top=true
+show-mounts=false
+show-mounts-network=true
+show-show-apps-button=true
+show-trash=true
+show-windows-preview=true
+transparency-mode='FIXED'
+
+[ding]
+add-volumes-opposite=false
+check-x11wayland=true
+show-home=false
+show-network-volumes=true
+show-trash=true
+start-corner='top-right'
+
+[just-perfection]
+accent-color-icon=false
+activities-button=false
+clock-menu-position=1
+notification-banner-position=1
+overlay-key=true
+panel-icon-size=0
+power-icon=true
+startup-status=0
+support-notifier-showed-version=36
+support-notifier-type=0
+window-picker-icon=true
+workspace-switcher-should-show=false
+workspace-wrap-around=true
+
+[mediacontrols]
+colored-player-icon=false
+elements-order=['ICON', 'CONTROLS', 'LABEL']
+extension-index=uint32 0
+extension-position='Left'
+fixed-label-width=false
+hide-media-notification=false
+label-width=uint32 720
+labels-order=['ARTIST', '-', 'TITLE', '/', 'ALBUM']
+scroll-labels=true
+show-control-icons-seek-backward=false
+show-control-icons-seek-forward=false
+show-label=true
+show-player-icon=true
+show-track-slider=true
+
+[p7-borders]
+default-active-color='auto-solid'
+default-enabled=true
+default-inactive-color='rgba(53, 132, 228, 0.5)'
+default-width=2
+schema-version=1
+
+[search-light]
+animation-speed=56.0
+blur-background=true
+blur-brightness=0.59999999999999998
+blur-sigma=30.0
+border-radius=1.3424657534246576
+border-thickness=0
+entry-font-size=1
+monitor-count=1
+popup-at-cursor-monitor=false
+preferred-monitor=0
+scale-height=0.10000000000000001
+scale-width=0.10000000000000001
+shortcut-search=['<Super>space']
+show-panel-icon=false
+window-effect=0
+
+[soft-brightness-plus]
+show-value=true
+
+[status-area-horizontal-spacing]
+hpadding=3
+
+[top-bar-organizer]
+center-box-order=['dateMenu']
+left-box-order=['activities', 'Media Controls', 'media-controls-advanced-media-controller@sanjai.com', 'vitalsMenu']
+right-box-order=['appindicator-kstatusnotifieritem-1Password_status_icon_1', 'appindicator-kstatusnotifieritem-Claude_status_icon_1', 'appindicator-kstatusnotifieritem-TelegramDesktop', 'clipboardIndicator', 'drive-menu', 'appindicator-kstatusnotifieritem-steam', 'appindicator-kstatusnotifieritem-NordVPN', 'screenRecording', 'screenSharing', 'dwellClick', 'a11y', 'keyboard', 'quickSettings']
+
+[topbar-weather]
+show-apparent-temp=false
+weather-after-clock=true
+
+[transparencias]
+nautilus-blur=true
+nautilus-opacity=0.84999999999999998
+
+[vitals]
+battery-colors=@as []
+fan-colors=@as []
+gpu-colors=@as []
+hot-sensors=['_memory_usage_', '__network-rx_max__']
+icon-style=1
+include-static-info=true
+memory-colors=@as []
+position-in-panel=0
+processor-colors=@as []
+show-gpu=true
+show-system=false
+show-voltage=false
+system-colors=@as []
+temperature-colors=@as []

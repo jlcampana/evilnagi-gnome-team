@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.transparencias" path="/org/gnome/shell/extensions/transparencias/">
+    <key name="nautilus-opacity" type="d">
+      <range min="0.5" max="1.0"/>
+      <default>0.85</default>
+      <summary>Opacidad de las ventanas de Nautilus</summary>
+      <description>La lee la extensión de nautilus-python opacidad-nautilus.py y la aplica en directo.</description>
+    </key>
+    <key name="ptyxis-opacity" type="d">
+      <range min="0.5" max="1.0"/>
+      <default>0.85</default>
+      <summary>Opacidad de la terminal (Ptyxis)</summary>
+      <description>La extensión la pone en todos los perfiles de Ptyxis, también en los que se creen después. Si se cambia desde las preferencias de Ptyxis, se recoge aquí.</description>
+    </key>
+    <key name="nautilus-blur" type="b">
+      <default>true</default>
+      <summary>Blur detrás de las ventanas de Nautilus</summary>
+    </key>
+    <key name="ptyxis-blur" type="b">
+      <default>true</default>
+      <summary>Blur detrás de las ventanas de Ptyxis</summary>
+    </key>
+    <key name="blur-nivel" type="i">
+      <range min="0" max="100"/>
+      <default>21</default>
+      <summary>Intensidad del blur</summary>
+      <description>Sigma del desenfoque gaussiano (el radio del efecto es el doble), común a todas las ventanas con blur.</description>
+    </key>
+    <!-- Obsoletas: las usaba la versión con "Resto de apps GTK". Se mantienen para que una versión
+         antigua que siga cargada (hasta cerrar sesión) no falle al leerlas. -->
+    <key name="gtk-opacity" type="d">
+      <default>1.0</default>
+      <summary>Obsoleta</summary>
+    </key>
+    <key name="gtk-blur" type="b">
+      <default>false</default>
+      <summary>Obsoleta</summary>
+    </key>
+    <key name="gtk-blur-clases" type="as">
+      <default>[]</default>
+      <summary>Obsoleta</summary>
+    </key>
+  </schema>
+</schemalist>
