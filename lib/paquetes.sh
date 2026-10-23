@@ -53,6 +53,7 @@ paquetes_extra_fedora() {
     # van en paquetes sueltos. --skip-unavailable ignora las que no existan.
     cat <<'EOF'
 ptyxis
+gnome-shell-extension-appindicator
 gnome-shell-extension-drive-menu
 gnome-shell-extension-launch-new-instance
 gnome-shell-extension-places-menu

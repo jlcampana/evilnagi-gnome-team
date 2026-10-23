@@ -34,7 +34,7 @@ No se incluyen datos personales (fondos, avatares, memorias, credenciales, scrip
 - `sudo` (o `pkexec`): el instalador pide permisos solo para instalar paquetes.
 - No lo ejecutes entero con `sudo`; instalaría las cosas en `/root`.
 
-Probado en **Fedora 44** y **Ubuntu 26.04** con GNOME 50. En Ubuntu, **Dash to Dock no se instala**: chocaría con Ubuntu Dock, que usa los mismos ajustes, así que el dock queda igual.
+Probado en **Fedora 44** con **GNOME 50**. En **Ubuntu 24.04+** se instalan los equivalentes de `apt` y las mismas extensiones; **Dash to Dock no se instala**: chocaría con Ubuntu Dock, que usa los mismos ajustes, así que el dock queda igual.
 
 ## Instalación
 
