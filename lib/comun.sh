@@ -115,6 +115,33 @@ poner() { # poner <origen> <destino>
     cp -a "$1" "$2"
 }
 
+# --- Alias de ~/.bashrc ---------------------------------------------------
+# Añade alias cómodos sin duplicarlos ni pisar los que ya existan. Va en un
+# bloque marcado para que el desinstalador sepa quitarlos.
+configurar_alias_bashrc() {
+    local bashrc="$HOME/.bashrc" add_reload=0 add_open=0 nombres=""
+    grep -q '# >>> evilnagi-gnome-team aliases >>>' "$bashrc" 2>/dev/null && return 0
+    grep -qE '^[[:space:]]*alias[[:space:]]+reload=' "$bashrc" 2>/dev/null || add_reload=1
+    grep -qE '^[[:space:]]*alias[[:space:]]+open=' "$bashrc" 2>/dev/null || add_open=1
+    (( add_reload || add_open )) || return 0
+    (( add_reload )) && nombres="reload"
+    (( add_open )) && nombres="${nombres:+$nombres, }open"
+    respaldar "$bashrc"
+    {
+        echo
+        echo '# >>> evilnagi-gnome-team aliases >>>'
+        echo '# Alias cómodos (los añade el instalador)'
+        if (( add_reload )); then
+            echo 'alias reload="source $HOME/.bashrc"'
+        fi
+        if (( add_open )); then
+            echo "alias open='xdg-open'"
+        fi
+        echo '# <<< evilnagi-gnome-team aliases <<<'
+    } >> "$bashrc"
+    ok "Alias añadidos a ~/.bashrc: $nombres"
+}
+
 # --- Descargas ------------------------------------------------------------
 descargar() { # descargar <url> <destino>
     mkdir -p "$(dirname "$2")"

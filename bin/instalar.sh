@@ -87,6 +87,9 @@ if (( ASUMIR == 0 )); then
     preguntar_si "¿Continuar? [S/n]" s || { echo "Cancelado."; exit 0; }
 fi
 
+# Alias cómodos para el terminal (independiente de tema y descargas)
+configurar_alias_bashrc
+
 (( CON_PAQUETES )) && instalar_paquetes
 
 if (( CON_TEMA )); then

@@ -60,11 +60,14 @@ for f in gtk-compacto nautilus-compacto dialogos-confirmacion instalar-morewaita
 done
 rm -f "$HOME/scripts"/{ydl,yda,xdl,twitter,r34dl,allr34dl,r34html.py}
 
-# Bloque del PATH en ~/.bashrc
-if grep -q '# >>> evilnagi-gnome-team >>>' "$HOME/.bashrc" 2>/dev/null; then
+# Bloques del PATH y de los alias en ~/.bashrc
+if grep -qE '# >>> evilnagi-gnome-team( aliases)? >>>' "$HOME/.bashrc" 2>/dev/null; then
     respaldar "$HOME/.bashrc"
-    sed -i '/^# >>> evilnagi-gnome-team >>>$/,/^# <<< evilnagi-gnome-team <<<$/d' "$HOME/.bashrc"
-    ok "Bloque del PATH quitado de ~/.bashrc"
+    sed -i \
+        -e '/^# >>> evilnagi-gnome-team >>>$/,/^# <<< evilnagi-gnome-team <<<$/d' \
+        -e '/^# >>> evilnagi-gnome-team aliases >>>$/,/^# <<< evilnagi-gnome-team aliases <<<$/d' \
+        "$HOME/.bashrc"
+    ok "Bloques del PATH y de los alias quitados de ~/.bashrc"
 fi
 
 paso "Tracker"

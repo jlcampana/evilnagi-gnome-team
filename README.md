@@ -24,11 +24,12 @@ curl -fsSL https://raw.githubusercontent.com/jlcampana/evilnagi-gnome-team/main/
 Ese único comando:
 
 1. Descarga el repositorio a una carpeta temporal (no hace falta tener `git` ni clonar nada).
-2. Instala con `dnf` o `apt` los paquetes que falten (iconos, fuentes, Ptyxis, gThumb, `openmpt123`…).
-3. Aplica el tema de GNOME: GTK, Nautilus, botones, dock, barra, transparencias, rebordes, iconos y fondo.
-4. Instala las extensiones de GNOME y sus ajustes.
-5. Instala los scripts de descarga (`ydl`, `yda`, `xdl`, `twitter`, `r34dl`, `allr34dl`) y el reproductor **tracker**.
-6. Guarda una copia de lo que sobrescribe en `~/backups/evilnagi-gnome-team-<fecha>/`.
+2. Añade a `~/.bashrc` los alias `reload` y `open` (sin duplicar los que ya existan).
+3. Instala con `dnf` o `apt` los paquetes que falten (iconos, fuentes, Ptyxis, gThumb, `openmpt123`…).
+4. Aplica el tema de GNOME: GTK, Nautilus, botones, dock, barra, transparencias, rebordes, iconos y fondo.
+5. Instala las extensiones de GNOME y sus ajustes.
+6. Instala los scripts de descarga (`ydl`, `yda`, `xdl`, `twitter`, `r34dl`, `allr34dl`) y el reproductor **tracker**.
+7. Guarda una copia de lo que sobrescribe en `~/backups/evilnagi-gnome-team-<fecha>/`.
 
 El instalador pregunta si el equipo es portátil o sobremesa y pide confirmación antes de empezar. Las preguntas se leen por `/dev/tty`, así que funcionan aunque el script venga por una tubería (`curl | bash`).
 
@@ -147,7 +148,7 @@ extras/trackerplay/        Reproductor de música tracker
 ./bin/desinstalar.sh --todo   # además borra venvs y configuración
 ```
 
-Los ajustes de dconf (dock, extensiones, fondo…) no se revierten solos; el desinstalador deja las extensiones desactivadas y explica cómo volver al aspecto por defecto.
+Los ajustes de dconf (dock, extensiones, fondo…) no se revierten solos; el desinstalador deja las extensiones desactivadas y explica cómo volver al aspecto por defecto. También quita los bloques que el instalador añadió a `~/.bashrc` (el `PATH` de `~/scripts` y los alias `reload` y `open`), sin tocar el resto del archivo.
 
 ## Problemas frecuentes
 
